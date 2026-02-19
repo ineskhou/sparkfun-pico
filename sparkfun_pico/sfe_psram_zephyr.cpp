@@ -42,11 +42,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <zephyr/irq.h>
 #include <zephyr/kernel.h>
 
-// RP2350 QMI/XIP (Pico SDK headers; required for register layout and base address)
-// #include "hardware/address_mapped.h"
-// #include "hardware/gpio.h"
-// #include "hardware/structs/qmi.h"
-// #include "hardware/structs/xip_ctrl.h"
+// Pico SDK uses __no_inline_not_in_flash_func(name) to put code in RAM; Zephyr has no equivalent, use identity macro.
+#ifndef __no_inline_not_in_flash_func
+#define __no_inline_not_in_flash_func(func_name) func_name
+#endif
+
+// RP2350 QMI/XIP (from Pico SDK or Zephyr HAL; required for register layout and base address)
+#include "hardware/address_mapped.h"
+#include "hardware/gpio.h"
+#include "hardware/structs/qmi.h"
+#include "hardware/structs/xip_ctrl.h"
 
 // qmi_hw_t is the struct type defined in the same qmi.h: it holds the QMI registers (direct_csr, direct_tx, direct_rx,
 // the two memory windows m[2] of type qmi_mem_hw_t, and atrans[8]).
@@ -295,14 +300,16 @@ static size_t __no_inline_not_in_flash_func(setup_psram)(uint32_t psram_cs_pin) 
     return psram_size;
 }
 
-// public interface
+// public interface (C linkage for C++ callers)
 
-// setup call
+// extern "C" {
+
 size_t sfe_setup_psram(uint32_t psram_cs_pin) {
     return setup_psram(psram_cs_pin);
 }
 
-// update timing -- used if the system clock/timing was changed.
 void sfe_psram_update_timing(void) {
     set_psram_timing();
-}tiythyvkjklhgdkjhfkdajhkkjdflkjhfelkj
+}
+
+//}
