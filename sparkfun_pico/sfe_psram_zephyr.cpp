@@ -34,6 +34,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // - Minimal Pico SDK kept for RP2350 QMI/XIP (qmi_hw, xip_ctrl_hw) and gpio_set_function(XIP_CS1)
 // - Caller can pass PSRAM CS pin from devicetree (e.g. DT_GPIO_PIN(DT_NODELABEL(psram0), cs_gpios))
 */
+
+#define PSRAM_CS_PIN  DT_GPIO_PIN_BY_IDX(DT_NODELABEL(psram0), cs_gpios, 0)
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,6 +55,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "hardware/gpio.h"
 #include "hardware/structs/qmi.h"
 #include "hardware/structs/xip_ctrl.h"
+
 
 // qmi_hw_t is the struct type defined in the same qmi.h: it holds the QMI registers (direct_csr, direct_tx, direct_rx,
 // the two memory windows m[2] of type qmi_mem_hw_t, and atrans[8]).
@@ -303,9 +307,9 @@ static size_t __no_inline_not_in_flash_func(setup_psram)(uint32_t psram_cs_pin) 
 // public interface (C linkage for C++ callers)
 extern "C" {
 
-size_t sfe_setup_psram(uint32_t psram_cs_pin) {
-    return setup_psram(psram_cs_pin);
-}
+size_t sfe_setup_psram() {
+    return setup_psram(PSRAM_CS_PIN);
+}   
 
 void sfe_psram_update_timing(void) {
     set_psram_timing();
