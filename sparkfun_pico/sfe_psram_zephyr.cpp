@@ -31,7 +31,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // Zephyr transition:
 // - irq_lock() / irq_unlock() instead of save_and_disable_interrupts() / restore_interrupts()
 // - sys_clock_hw_cycles_per_sec() instead of clock_get_hz(clk_sys)
-// - Minimal Pico SDK kept for RP2350 QMI/XIP (qmi_hw, xip_ctrl_hw) and gpio_set_function(XIP_CS1)
+// - PSRAM CS pin (XIP_CS1) set via Pico SDK gpio_set_function (Zephyr pinctrl not generated for qmi/psram0)
 // - Caller can pass PSRAM CS pin from devicetree (e.g. DT_GPIO_PIN(DT_NODELABEL(psram0), cs_gpios))
 */
 
@@ -44,17 +44,25 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // Zephyr APIs
 #include <zephyr/irq.h>
 #include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 
+LOG_MODULE_REGISTER(sfe_psram_zephyr);
 // Pico SDK uses __no_inline_not_in_flash_func(name) to put code in RAM; Zephyr has no equivalent, use identity macro.
 #ifndef __no_inline_not_in_flash_func
 #define __no_inline_not_in_flash_func(func_name) func_name
 #endif
 
-// RP2350 QMI/XIP (from Pico SDK or Zephyr HAL; required for register layout and base address)
+// RP2350 QMI/XIP. Set PSRAM CS pin to XIP_CS1 via direct register write to avoid
+// Pico SDK gpio_set_function (can cause reboot in Zephyr; pads/asserts).
 #include "hardware/address_mapped.h"
-#include "hardware/gpio.h"
+#include "hardware/structs/io_bank0.h"
 #include "hardware/structs/qmi.h"
 #include "hardware/structs/xip_ctrl.h"
+
+/* RP2350 GPIO pad function: XIP_CS1 (QMI chip select 1) per io_bank0.h */
+#define XIP_CS1_FUNCSEL 9u
+
+
 
 
 // qmi_hw_t is the struct type defined in the same qmi.h: it holds the QMI registers (direct_csr, direct_tx, direct_rx,
@@ -113,6 +121,8 @@ const uint8_t PSRAM_ID = 0x5D;
 ///
 /// @note This function expects the CS pin set
 static size_t __no_inline_not_in_flash_func(get_psram_size)(void) {
+    printk("get_psssram_size: in 5 seconds\n");
+    k_sleep(K_MSEC(5000));
     size_t psram_size = 0;
     unsigned int intr_stash = irq_lock();
 
@@ -223,14 +233,22 @@ static void __no_inline_not_in_flash_func(set_psram_timing)(void) {
 /// @return size_t The size of the PSRAM
 ///
 static size_t __no_inline_not_in_flash_func(setup_psram)(uint32_t psram_cs_pin) {
-    printk("setup_psram: psram_cs_pin: %d\n", psram_cs_pin);
-    // Set the PSRAM CS pin in the SDK
-    gpio_set_function(psram_cs_pin, GPIO_FUNC_XIP_CS1);
-    printk("PSRAM CS pin set to %d\n", psram_cs_pin);
+    printk("setup_psram: psram_cs_pin in 5 seconds: %d\n", psram_cs_pin);
 
+    k_sleep(K_MSEC(5000));
+    // Set PSRAM CS pin to XIP_CS1 via IO_BANK0 CTRL (direct write avoids SDK reboot)
+    if (psram_cs_pin < 48u) {
+	    io_bank0_hw->io[psram_cs_pin].ctrl = XIP_CS1_FUNCSEL;
+    }
+    printk("PSRAM CS pin set to %u (XIP_CS1)\n", psram_cs_pin);
+
+    k_sleep(K_MSEC(5000));
+    printk("setup_psram: psram_cs_pin done: %d\n", psram_cs_pin);
+    k_sleep(K_MSEC(5000));
     // start with zero size
     size_t psram_size = get_psram_size();
     printk("PSRAM size: %d\n", psram_size);
+    k_sleep(K_MSEC(2000));
     // No PSRAM - no dice
     if (psram_size == 0)
         return 0;
